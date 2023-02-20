@@ -106,6 +106,23 @@ lazy val parsley = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     Test / bloopGenerate := None,
   )
 
+lazy val parsleyDebug = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+  .withoutSuffixFor(JVMPlatform)
+  .crossType(CrossType.Full)
+  .in(file("parsley-debug"))
+  .dependsOn(parsley)
+  .settings(
+    name := "parsley-debug",
+
+    // Unclear if this is also needed but see the same line within parsley project object.
+    resolvers ++= Opts.resolver.sonatypeOssReleases,
+    libraryDependencies ++= Seq(
+      "org.scalatest" %%% "scalatest" % "3.2.15" % Test,
+      "org.scalacheck" %%% "scalacheck" % "1.17.0" % Test,
+      "org.scalatestplus" %%% "scalacheck-1-17" % "3.2.15.0" % Test,
+    ),
+  )
+
 def testCoverageJob(cacheSteps: List[WorkflowStep]) = WorkflowJob(
     id = "coverage",
     name = "Run Test Coverage and Upload",
