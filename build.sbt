@@ -78,7 +78,7 @@ inThisBuild(List(
   githubWorkflowAddedJobs += testCoverageJob(githubWorkflowGeneratedCacheSteps.value.toList),
 ))
 
-lazy val root = tlCrossRootProject.aggregate(parsley)
+lazy val root = tlCrossRootProject.aggregate(parsley, parsleyDebug)
 
 lazy val parsley = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .withoutSuffixFor(JVMPlatform)
