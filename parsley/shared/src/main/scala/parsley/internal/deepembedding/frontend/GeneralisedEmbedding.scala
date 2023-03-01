@@ -11,6 +11,8 @@ import parsley.internal.deepembedding.backend, backend.StrictParsley
 private [frontend] abstract class Unary[A, B](p: LazyParsley[A]) extends LazyParsley[B] {
     def make(p: StrictParsley[A]): StrictParsley[B]
 
+    def parser: LazyParsley[A] = p
+
     final override def findLetsAux[Cont[_, +_]: ContOps, R](seen: Set[LazyParsley[_]])(implicit state: LetFinderState): Cont[R,Unit] =
         suspend(p.findLets(seen))
     override def preprocess[Cont[_, +_]: ContOps, R, B_ >: B](implicit lets: LetMap, recs: RecMap): Cont[R, StrictParsley[B_]] =
@@ -21,6 +23,9 @@ private [frontend] abstract class Binary[A, B, C](left: LazyParsley[A], _right: 
     private lazy val right = _right
 
     def make(p: StrictParsley[A], q: StrictParsley[B]): StrictParsley[C]
+
+    def leftParser: LazyParsley[A] = left
+    def rightParser: LazyParsley[B] = _right
 
     final override def findLetsAux[Cont[_, +_]: ContOps, R](seen: Set[LazyParsley[_]])(implicit state: LetFinderState): Cont[R,Unit] = {
         suspend(left.findLets[Cont, R](seen)) >> suspend(right.findLets(seen))
@@ -37,6 +42,10 @@ private [frontend] abstract class Ternary[A, B, C, D](first: LazyParsley[A], _se
     private lazy val third: LazyParsley[C] = _third
 
     def make(p: StrictParsley[A], q: StrictParsley[B], r: StrictParsley[C]): StrictParsley[D]
+
+    def firstParser: LazyParsley[A] = first
+    def secondParser: LazyParsley[B] = _second
+    def thirdParser: LazyParsley[C] = _third
 
     final override def findLetsAux[Cont[_, +_]: ContOps, R](seen: Set[LazyParsley[_]])(implicit state: LetFinderState): Cont[R, Unit] = {
         suspend(first.findLets[Cont, R](seen)) >> suspend(second.findLets(seen)) >> suspend(third.findLets(seen))

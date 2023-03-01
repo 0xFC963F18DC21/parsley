@@ -7,6 +7,9 @@ import parsley.internal.deepembedding.ContOps, ContOps.{suspend, ContAdapter}
 import parsley.internal.deepembedding.backend, backend.StrictParsley
 
 private [parsley] final class <|>[A](p: LazyParsley[A], q: LazyParsley[A]) extends LazyParsley[A] {
+    def leftParser: LazyParsley[A] = p
+    def rightParser: LazyParsley[A] = q
+
     final override def findLetsAux[Cont[_, +_]: ContOps, R](seen: Set[LazyParsley[_]])(implicit state: LetFinderState): Cont[R,Unit] = {
         suspend(p.findLets[Cont, R](seen)) >> suspend(q.findLets(seen))
     }
