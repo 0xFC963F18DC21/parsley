@@ -7,7 +7,7 @@ import scala.collection.mutable.ListBuffer
 
 import parsley.debugger.ParseAttempt
 
-import parsley.internal.deepembedding.frontend.LazyParsley
+import parsley.internal.deepembedding.frontend.{Iterative, LazyParsley}
 
 // Class used to hold details about a parser being debugged.
 // This is normally held as a value inside an implicit variable.
@@ -22,6 +22,8 @@ private [parsley] class DebugContext {
   private var builderStack: ListBuffer[DebugTreeBuilder] =
     ListBuffer(dummyRoot)
 
+  private var parserStack: ListBuffer[LazyParsley[_]] = ListBuffer()
+
   // Get the final DebugTreeBuilder from this context.
   def getFinalBuilder: DebugTreeBuilder =
     builderStack.head.bChildren.collectFirst { case (_, x) => x }.get
@@ -30,14 +32,20 @@ private [parsley] class DebugContext {
   def addParseAttempt(attempt: ParseAttempt): Unit =
     builderStack.head.node.parse = Some(attempt)
 
+  // Is the parser just under the top iterative?
+  def secondIsIterative(): Boolean =
+    parserStack.drop(1).headOption.exists(_.isInstanceOf[Iterative])
+
   // Reset this context back to zero.
   def reset(): Unit = {
     builderStack = ListBuffer(dummyRoot)
+    parserStack = ListBuffer()
   }
 
   // Push a new parser onto the parser callstack.
   def push(fullInput: String, parser: LazyParsley[_]): Unit = {
     lazy val uniq: Unique[LazyParsley[_]] = Unique(parser)
+    parserStack = parserStack.prepend(parser)
 
     if (builderStack.head.bChildren.contains(uniq)) {
       builderStack.prepend(builderStack.head.bChildren(uniq))
@@ -60,6 +68,7 @@ private [parsley] class DebugContext {
       println("WARNING: Parser stack underflow on pop. This should not have happened!")
     } else {
       // Remove first parser off stack, as if returning from that parser.
+      parserStack.remove(0)
       builderStack.remove(0)
       () // XXX: Silences discarded non-unit value warning.
     }

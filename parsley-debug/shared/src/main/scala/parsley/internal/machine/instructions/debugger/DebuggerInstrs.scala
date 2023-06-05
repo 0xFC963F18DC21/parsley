@@ -7,6 +7,7 @@ import parsley.debugger.ParseAttempt
 import parsley.debugger.internal.DebugContext
 
 import parsley.internal.deepembedding.frontend.LazyParsley
+import parsley.internal.deepembedding.frontend.debugger.Accumulator
 import parsley.internal.machine.Context
 import parsley.internal.machine.instructions.{Instr, InstrWithLabel}
 
@@ -31,7 +32,10 @@ private [internal] class EnterParser
 // Add a parse attempt to the current context at the current callstack point, and leave the current
 // parser's scope.
 private [internal] class AddAttemptAndLeave(implicit dbgCtx: DebugContext) extends DebuggerInstr {
+  //noinspection ScalaStyle
   override def apply(ctx: Context): Unit = {
+    // XXX: This is a very long method that could probably be simplified.
+
     // These offsets will be needed to slice the specific part of the input that the parser has
     // attempted to parse during its attempt.
     val prevCheck = ctx.checkStack.offset
@@ -61,6 +65,30 @@ private [internal] class AddAttemptAndLeave(implicit dbgCtx: DebugContext) exten
         if (success) Some(ctx.stack.peek.asInstanceOf[Any]) else None
       )
     )
+
+    // If the top of the parser stack after popping is iterative, add the current accumulator value,
+    // which should be the second value in the stack.
+    if (dbgCtx.secondIsIterative()) {
+      dbgCtx.push(ctx.input, Accumulator)
+      dbgCtx.addParseAttempt(
+        ParseAttempt(
+          input,
+          if (ctx.good) currentOff else currentOff + 1,
+          if (ctx.good) currentOff else currentOff + 1,
+          if (ctx.good) (ctx.line, ctx.col - 1) else (ctx.line, ctx.col),
+          if (ctx.good) (ctx.line, ctx.col - 1) else (ctx.line, ctx.col),
+          success = ctx.stack.size >= 2 && ctx.good,
+          if (ctx.stack.size >= 2 && ctx.good) {
+            val top: Any = ctx.stack.pop().asInstanceOf[Any]
+            val second: Any = ctx.stack.peek.asInstanceOf[Any]
+
+            ctx.stack.push(top)
+            Some(second)
+          } else None
+        )
+      )
+      dbgCtx.pop()
+    }
 
     // See above.
     dbgCtx.pop()
