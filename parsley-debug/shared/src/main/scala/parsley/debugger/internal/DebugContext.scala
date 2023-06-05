@@ -22,7 +22,11 @@ private [parsley] class DebugContext {
   private var builderStack: ListBuffer[DebugTreeBuilder] =
     ListBuffer(dummyRoot)
 
+  // Current raw parser stack.
   private var parserStack: ListBuffer[LazyParsley[_]] = ListBuffer()
+
+  // Iterative child depth.
+  private var iterativeChildren: ListBuffer[(Int, Int)] = ListBuffer()
 
   // Get the final DebugTreeBuilder from this context.
   def getFinalBuilder: DebugTreeBuilder =
@@ -32,12 +36,43 @@ private [parsley] class DebugContext {
   def addParseAttempt(attempt: ParseAttempt): Unit =
     builderStack.head.node.parse = Some(attempt)
 
+  // Is the top parser iterative?
+  def topIsIterative(): Boolean =
+    parserStack.headOption.exists(_.isInstanceOf[Iterative])
+
   // Is the parser just under the top iterative?
   def secondIsIterative(): Boolean =
     parserStack.drop(1).headOption.exists(_.isInstanceOf[Iterative])
 
+  def pushIterative(count: Int): Unit =
+    iterativeChildren.prepend((count, count))
+
+  def popIterative(): Unit = {
+    iterativeChildren.remove(0)
+    () // XXX: Silences discarded non-unit value warning.
+  }
+
+  def setIterativeChildren(count: Int): Unit = {
+    val (mx, _) = iterativeChildren.head
+    iterativeChildren.remove(0)
+    iterativeChildren.prepend((mx, count))
+    () // XXX: Silences discarded non-unit value warning.
+  }
+
+  def getIterativeMax(): Int =
+    iterativeChildren.headOption.getOrElse((0, 0))._1
+
+  def decrementIterativeChildren(): Boolean = {
+    val (mx, c) = iterativeChildren.head
+    iterativeChildren.remove(0)
+    iterativeChildren.prepend((mx, if (c == 1) mx else c - 1))
+
+    c == 1
+  }
+
   // Reset this context back to zero.
   def reset(): Unit = {
+    iterativeChildren = ListBuffer()
     builderStack = ListBuffer(dummyRoot)
     parserStack = ListBuffer()
   }
@@ -62,14 +97,16 @@ private [parsley] class DebugContext {
   }
 
   // Pop a parser off the parser callstack.
-  def pop(): Unit =
+  def pop(): LazyParsley[_] =
     if (builderStack.isEmpty) {
       // Shouldn't happen, but just in case.
-      println("WARNING: Parser stack underflow on pop. This should not have happened!")
+      //noinspection ScalaStyle
+      throw new IllegalStateException(
+        "WARNING: Parser stack underflow on pop. This should not have happened!"
+      )
     } else {
       // Remove first parser off stack, as if returning from that parser.
-      parserStack.remove(0)
       builderStack.remove(0)
-      () // XXX: Silences discarded non-unit value warning.
+      parserStack.remove(0)
     }
 }

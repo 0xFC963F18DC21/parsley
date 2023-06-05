@@ -4,9 +4,11 @@
 package parsley.internal.deepembedding.frontend.debugger
 
 import parsley.debugger.internal.DebugContext
-import parsley.internal.deepembedding.ContOps.{ContAdapter, suspend}
+
+import parsley.internal.deepembedding.ContOps
+import parsley.internal.deepembedding.ContOps.{suspend, ContAdapter}
+import parsley.internal.deepembedding.backend
 import parsley.internal.deepembedding.backend.StrictParsley
-import parsley.internal.deepembedding.{backend, ContOps}
 import parsley.internal.deepembedding.frontend.{LazyParsley, LetFinderState, LetMap, RecMap}
 
 // Wrapper class signifying debugged classes

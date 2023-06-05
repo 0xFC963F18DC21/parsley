@@ -47,6 +47,17 @@ object helpers {
         Nil
     }
 
+  private [parsley] def childCount(parser: LazyParsley[_]): (Int, Int) = {
+    // If the parser is iterative and has initial nodes, put the number of initial nodes as the first
+    // item of the tuple.
+    parser match {
+      case _: frontend.Chainl[_, _] => (1, 2)
+      case _ =>
+        val c = getChildren(parser).length
+        (c, c)
+    }
+  }
+
   // XXX: Very unsafe due to asInstanceOf call.
   private [this] def coerce[A](ix: Int)(implicit children: List[LazyParsley[Any]]): LazyParsley[A] =
     children(ix).asInstanceOf[LazyParsley[A]]

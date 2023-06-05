@@ -8,6 +8,7 @@ import parsley.debugger.internal.DebugContext
 
 import parsley.internal.deepembedding.frontend.LazyParsley
 import parsley.internal.deepembedding.frontend.debugger.Accumulator
+import parsley.internal.deepembedding.frontend.debugger.helpers.childCount
 import parsley.internal.machine.Context
 import parsley.internal.machine.instructions.{Instr, InstrWithLabel}
 
@@ -21,6 +22,15 @@ private [internal] class EnterParser
   override def apply(ctx: Context): Unit = {
     // I think we can get away with executing this unconditionally.
     dbgCtx.push(ctx.input, origin)
+
+    // If iterative, push the counter.
+    if (dbgCtx.topIsIterative()) {
+      val (init, rest) = childCount(origin)
+      dbgCtx.pushIterative(rest)
+      dbgCtx.setIterativeChildren(init)
+      dbgCtx.push(ctx.input, Accumulator)
+    }
+
     ctx.pushCheck() // Save our location for inputs.
     ctx.pushHandler(label) // Mark the AddAttempt instruction as an exit handler.
     ctx.inc()
@@ -32,6 +42,19 @@ private [internal] class EnterParser
 // Add a parse attempt to the current context at the current callstack point, and leave the current
 // parser's scope.
 private [internal] class AddAttemptAndLeave(implicit dbgCtx: DebugContext) extends DebuggerInstr {
+  // ix is 0-indexed.
+  def nthPeek(ctx: Context, ix: Int): Any = {
+    // Assumes a length check has already been done
+    if (ix == 0) ctx.stack.peek.asInstanceOf[Any]
+    else {
+      val top    = ctx.stack.pop().asInstanceOf[Any]
+      val result = nthPeek(ctx, ix - 1)
+
+      ctx.stack.push(top)
+      result
+    }
+  }
+
   //noinspection ScalaStyle
   override def apply(ctx: Context): Unit = {
     // XXX: This is a very long method that could probably be simplified.
@@ -66,33 +89,31 @@ private [internal] class AddAttemptAndLeave(implicit dbgCtx: DebugContext) exten
       )
     )
 
+    // See above.
+    if (dbgCtx.topIsIterative()) dbgCtx.popIterative()
+    dbgCtx.pop()
+    ctx.checkStack = ctx.checkStack.tail // Manually pop off our debug checkpoint.
+
     // If the top of the parser stack after popping is iterative, add the current accumulator value,
-    // which should be the second value in the stack.
-    if (dbgCtx.secondIsIterative()) {
-      dbgCtx.push(ctx.input, Accumulator)
+    // which should be the second value in the stack, but only if it is time to do so (all children
+    // have been evaluated).
+    if (dbgCtx.secondIsIterative() && dbgCtx.decrementIterativeChildren()) {
       dbgCtx.addParseAttempt(
         ParseAttempt(
           input,
-          if (ctx.good) currentOff else currentOff + 1,
-          if (ctx.good) currentOff else currentOff + 1,
-          if (ctx.good) (ctx.line, ctx.col - 1) else (ctx.line, ctx.col),
-          if (ctx.good) (ctx.line, ctx.col - 1) else (ctx.line, ctx.col),
-          success = ctx.stack.size >= 2 && ctx.good,
-          if (ctx.stack.size >= 2 && ctx.good) {
-            val top: Any = ctx.stack.pop().asInstanceOf[Any]
-            val second: Any = ctx.stack.peek.asInstanceOf[Any]
-
-            ctx.stack.push(top)
-            Some(second)
-          } else None
+          if (ctx.good) currentOff - 1 else currentOff,
+          if (ctx.good) currentOff - 1 else currentOff,
+          if (ctx.good) (ctx.line, ctx.col - 2) else (ctx.line, ctx.col - 1),
+          if (ctx.good) (ctx.line, ctx.col - 2) else (ctx.line, ctx.col - 1),
+          success = ctx.stack.size >= dbgCtx.getIterativeMax() + 1,
+          if (ctx.stack.size >= dbgCtx.getIterativeMax() + 1)
+            Some(nthPeek(ctx, dbgCtx.getIterativeMax()))
+          else None
         )
       )
-      dbgCtx.pop()
+      dbgCtx.pop() // Pop the current accumulator
+      if (ctx.good) dbgCtx.push(ctx.input, Accumulator) // Add a new accumulator only if we continue.
     }
-
-    // See above.
-    dbgCtx.pop()
-    ctx.checkStack = ctx.checkStack.tail // Manually pop off our debug checkpoint.
 
     // Fail if the current context is not good, as required by how Parsley's machine functions.
     if (ctx.good) {
