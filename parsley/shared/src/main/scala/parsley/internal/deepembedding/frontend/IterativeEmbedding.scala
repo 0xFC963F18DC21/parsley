@@ -21,7 +21,7 @@ private [parsley] final class ChainPost[A](p: LazyParsley[A], _op: =>LazyParsley
 
     override def visit[T, U[+_]](visitor: LazyParsleyIVisitor[T, U], context: T): U[A] = visitor.visit(this, context)(p, _op)
 }
-private [parsley] final class ChainPre[A](p: LazyParsley[A], op: LazyParsley[A => A]) extends LazyParsley[A] {
+private [parsley] final class ChainPre[A](private [parsley] val p: LazyParsley[A], private [parsley] val op: LazyParsley[A => A]) extends LazyParsley[A] {
     final override def findLetsAux[M[_, _]: ContOps, R](seen: Set[LazyParsley[_]])(implicit state: LetFinderState): M[R, Unit] = {
         suspend(p.findLets[M, R](seen)) >> suspend(op.findLets(seen))
     }
@@ -32,6 +32,13 @@ private [parsley] final class ChainPre[A](p: LazyParsley[A], op: LazyParsley[A =
         } yield new backend.ChainPre(p, op)
 
     override def visit[T, U[+_]](visitor: LazyParsleyIVisitor[T, U], context: T): U[A] = visitor.visit(this, context)(p, op)
+}
+private [parsley] object ChainPre {
+    def unapply(p: LazyParsley[_]): Option[(LazyParsley[_], LazyParsley[_])] =
+        p match {
+            case cp: ChainPre[_] => Some((cp.p, cp.op))
+            case _               => None
+        }
 }
 private [parsley] final class Chainl[A, B](init: LazyParsley[B], p: =>LazyParsley[A], op: =>LazyParsley[(B, A) => B])
     extends Ternary[B, A, (B, A) => B, B](init, p, op) {
