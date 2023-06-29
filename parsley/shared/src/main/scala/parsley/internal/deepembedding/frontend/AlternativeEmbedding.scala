@@ -6,7 +6,7 @@ package parsley.internal.deepembedding.frontend
 import parsley.internal.deepembedding.ContOps, ContOps.{suspend, ContAdapter}
 import parsley.internal.deepembedding.backend, backend.StrictParsley
 
-private [parsley] final class <|>[A](val p: LazyParsley[A], val q: LazyParsley[A]) extends LazyParsley[A] {
+private [parsley] final class <|>[A](p: LazyParsley[A], q: LazyParsley[A]) extends LazyParsley[A] {
     final override def findLetsAux[M[_, _]: ContOps, R](seen: Set[LazyParsley[_]])(implicit state: LetFinderState): M[R,Unit] = {
         suspend(p.findLets[M, R](seen)) >> suspend(q.findLets(seen))
     }
@@ -17,12 +17,4 @@ private [parsley] final class <|>[A](val p: LazyParsley[A], val q: LazyParsley[A
         } yield backend.<|>(p, q)
 
     final override def visit[T, U[+_]](visitor: LazyParsleyIVisitor[T, U], context: T): U[A] = visitor.visit(this)(context, p, q)
-}
-
-private [parsley] object <|> {
-    def unapply[A](p: LazyParsley[_]): Option[(LazyParsley[_], LazyParsley[_])] =
-        p match {
-            case alt: <|>[_] => Some((alt.p, alt.q))
-            case _           => None
-        }
 }
